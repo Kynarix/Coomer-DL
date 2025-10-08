@@ -41,7 +41,7 @@ Developed by Kynarix
    - `CoomerDownloader.exe` dosyasını çift tıklayın
    - Eğer Windows Defender uyarısı çıkarsa "Daha fazla bilgi" → "Yine de çalıştır" seçin
 
-3. **Kullanmaya başlayın! 🎉**
+3. **Kullanmaya başlayın!**
 
 ## Kurulum
 
@@ -50,7 +50,7 @@ Developed by Kynarix
 #### 1. Projeyi Klonlayın
 
 ```bash
-git clone https://github.com/your-username/coomer-downloader.git
+git clone https://github.com/Kynarix/Coomer-DL.git
 cd coomer-downloader
 ```
 
