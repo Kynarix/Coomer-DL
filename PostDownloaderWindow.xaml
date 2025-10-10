@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:CoomerDownloader"
         mc:Ignorable="d"
         Title="Post Downloader - by Kynarix and Twixx" Height="750" Width="1200"
         Background="#0D1117" WindowStyle="None" AllowsTransparency="True" 
@@ -250,24 +251,75 @@
                 </ListView>
             </Border>
 
-            <!-- Download Progress -->
+            <!-- Download Progress & Statistics -->
             <Border Grid.Row="3" Background="#161B22" Padding="20,15" Margin="20,0,20,10" 
                     CornerRadius="8" BorderBrush="#30363D" BorderThickness="1">
                 <StackPanel>
-                    <TextBlock x:Name="DownloadStatusText" FontSize="13" Foreground="#C9D1D9" 
-                               Margin="0,0,0,10" HorizontalAlignment="Center" FontWeight="SemiBold"/>
-                    <Border Height="6" Background="#0D1117" CornerRadius="3" 
-                            Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}">
-                        <ProgressBar x:Name="DownloadProgressBar" Height="6" 
-                                     Visibility="Collapsed" Background="Transparent" BorderThickness="0">
-                            <ProgressBar.Foreground>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#238636" Offset="0"/>
-                                    <GradientStop Color="#2EA043" Offset="1"/>
-                                </LinearGradientBrush>
-                            </ProgressBar.Foreground>
-                        </ProgressBar>
-                    </Border>
+                    <!-- Main Status Text -->
+                    <TextBlock x:Name="DownloadStatusText" FontSize="14" Foreground="#C9D1D9" 
+                               Margin="0,0,0,12" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                    
+                    <!-- Progress Bar with Percentage -->
+                    <Grid Margin="0,0,0,12">
+                        <Border Height="8" Background="#0D1117" CornerRadius="4" 
+                                Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}">
+                            <ProgressBar x:Name="DownloadProgressBar" Height="8" 
+                                         Visibility="Collapsed" Background="Transparent" BorderThickness="0">
+                                <ProgressBar.Foreground>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#238636" Offset="0"/>
+                                        <GradientStop Color="#2EA043" Offset="0.5"/>
+                                        <GradientStop Color="#3FB950" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </ProgressBar.Foreground>
+                            </ProgressBar>
+                        </Border>
+                        <TextBlock x:Name="ProgressPercentageText" FontSize="11" Foreground="#C9D1D9" 
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"
+                                   Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}"/>
+                    </Grid>
+                    
+                    <!-- Statistics Grid -->
+                    <Grid x:Name="StatisticsGrid" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Files Downloaded -->
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Text="📁 Files" FontSize="11" Foreground="#8B949E" 
+                                       HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="FilesCountText" Text="0 / 0" FontSize="13" 
+                                       Foreground="#58A6FF" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Download Speed -->
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                            <TextBlock Text="⚡ Speed" FontSize="11" Foreground="#8B949E" 
+                                       HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="SpeedText" Text="0 MB/s" FontSize="13" 
+                                       Foreground="#3FB950" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Data Downloaded -->
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                            <TextBlock Text="💾 Size" FontSize="11" Foreground="#8B949E" 
+                                       HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="DataSizeText" Text="0 MB" FontSize="13" 
+                                       Foreground="#A371F7" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Time Remaining -->
+                        <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                            <TextBlock Text="⏱️ Remaining" FontSize="11" Foreground="#8B949E" 
+                                       HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="TimeRemainingText" Text="--:--" FontSize="13" 
+                                       Foreground="#F85149" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Border>
 

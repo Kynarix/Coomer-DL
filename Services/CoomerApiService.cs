@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -160,6 +161,95 @@ namespace CoomerDownloader.Services
         {
             return await _httpClient.GetByteArrayAsync(url);
         }
+
+        public async Task<ConnectionStatus> CheckConnectionStatus()
+        {
+            try
+            {
+                Console.WriteLine("[API] Checking connection to coomer.su...");
+                
+                bool dnsResolved = false;
+                bool httpSuccess = false;
+                
+                // DNS çözümlenebiliyor mu kontrol et
+                try
+                {
+                    var addresses = await Dns.GetHostAddressesAsync("coomer.su");
+                    dnsResolved = addresses.Length > 0;
+                    Console.WriteLine($"[API] DNS resolved: {dnsResolved} ({addresses.Length} addresses found)");
+                }
+                catch (Exception dnsEx)
+                {
+                    Console.WriteLine($"[API] DNS resolution failed: {dnsEx.Message}");
+                    return new ConnectionStatus 
+                    { 
+                        IsConnected = false, 
+                        HasDpiBlock = false,
+                        Message = "Site offline or DNS failed"
+                    };
+                }
+                
+                // HTTP bağlantısı başarılı mı kontrol et
+                try
+                {
+                    var testUrl = "https://coomer.su/";
+                    var response = await _httpClient.GetAsync(testUrl);
+                    httpSuccess = response.IsSuccessStatusCode;
+                    Console.WriteLine($"[API] HTTP request status: {response.StatusCode}");
+                    
+                    if (httpSuccess)
+                    {
+                        return new ConnectionStatus
+                        {
+                            IsConnected = true,
+                            HasDpiBlock = false,
+                            Message = "Connection successful"
+                        };
+                    }
+                }
+                catch (Exception httpEx)
+                {
+                    Console.WriteLine($"[API] HTTP request failed: {httpEx.Message}");
+                    httpSuccess = false;
+                }
+                
+                // DNS çözümlendi ama HTTP başarısız = DPI engeli!
+                if (dnsResolved && !httpSuccess)
+                {
+                    Console.WriteLine("[API] DPI block detected!");
+                    return new ConnectionStatus
+                    {
+                        IsConnected = false,
+                        HasDpiBlock = true,
+                        Message = "DPI block detected"
+                    };
+                }
+                
+                return new ConnectionStatus
+                {
+                    IsConnected = false,
+                    HasDpiBlock = false,
+                    Message = "Connection failed"
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[API] Connection check failed: {ex.Message}");
+                return new ConnectionStatus
+                {
+                    IsConnected = false,
+                    HasDpiBlock = false,
+                    Message = $"Error: {ex.Message}"
+                };
+            }
+        }
+    }
+
+    public class ConnectionStatus
+    {
+        public bool IsConnected { get; set; }
+        public bool HasDpiBlock { get; set; }
+        public string Message { get; set; } = "";
     }
 
     public class Creator
@@ -198,6 +288,16 @@ namespace CoomerDownloader.Services
                 if (files != null)
                     result.AddRange(files);
                 return result;
+            }
+        }
+        
+        [JsonIgnore]
+        public string substring
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(content)) return "";
+                return content.Length > 50 ? content.Substring(0, 50) + "..." : content;
             }
         }
     }

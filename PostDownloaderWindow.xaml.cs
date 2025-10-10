@@ -1,5 +1,6 @@
 using CoomerDownloader.Services;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Input;
@@ -129,11 +130,16 @@ namespace CoomerDownloader
             System.IO.Directory.CreateDirectory(downloadFolder);
 
             DownloadProgressBar.Visibility = Visibility.Visible;
+            StatisticsGrid.Visibility = Visibility.Visible;
             DownloadButton.IsEnabled = false;
             SelectAllButton.IsEnabled = false;
 
             int totalFiles = 0;
             int downloadedFiles = 0;
+            long totalBytesDownloaded = 0;
+            var stopwatch = Stopwatch.StartNew();
+            var lastUpdateTime = DateTime.Now;
+            long lastBytesDownloaded = 0;
 
             foreach (Post post in selectedPosts)
             {
@@ -143,6 +149,7 @@ namespace CoomerDownloader
 
             DownloadProgressBar.Maximum = totalFiles;
             DownloadProgressBar.IsIndeterminate = false;
+            FilesCountText.Text = $"0 / {totalFiles}";
 
             try
             {
@@ -159,13 +166,19 @@ namespace CoomerDownloader
                             {
                                 try
                                 {
-                                    DownloadStatusText.Text = $"Downloading: {file.name}... ({downloadedFiles + 1}/{totalFiles})";
+                                    DownloadStatusText.Text = $"Downloading: {file.name}...";
                                     var filePath = System.IO.Path.Combine(downloadFolder, file.name);
                                     var fileUrl = $"https://coomer.st{file.path}";
                                     var fileBytes = await client.GetByteArrayAsync(fileUrl);
                                     await System.IO.File.WriteAllBytesAsync(filePath, fileBytes);
+                                    
                                     downloadedFiles++;
+                                    totalBytesDownloaded += fileBytes.Length;
                                     DownloadProgressBar.Value = downloadedFiles;
+                                    
+                                    // İstatistikleri güncelle
+                                    UpdateDownloadStatistics(downloadedFiles, totalFiles, totalBytesDownloaded, stopwatch.Elapsed, 
+                                        ref lastUpdateTime, ref lastBytesDownloaded);
                                 }
                                 catch (System.Exception ex)
                                 {
@@ -183,13 +196,19 @@ namespace CoomerDownloader
                                 {
                                     try
                                     {
-                                        DownloadStatusText.Text = $"Downloading: {attachment.name}... ({downloadedFiles + 1}/{totalFiles})";
+                                        DownloadStatusText.Text = $"Downloading: {attachment.name}...";
                                         var attachmentPath = System.IO.Path.Combine(downloadFolder, attachment.name);
                                         var attachmentUrl = $"https://coomer.st{attachment.path}";
                                         var attachmentBytes = await client.GetByteArrayAsync(attachmentUrl);
                                         await System.IO.File.WriteAllBytesAsync(attachmentPath, attachmentBytes);
+                                        
                                         downloadedFiles++;
+                                        totalBytesDownloaded += attachmentBytes.Length;
                                         DownloadProgressBar.Value = downloadedFiles;
+                                        
+                                        // İstatistikleri güncelle
+                                        UpdateDownloadStatistics(downloadedFiles, totalFiles, totalBytesDownloaded, stopwatch.Elapsed, 
+                                            ref lastUpdateTime, ref lastBytesDownloaded);
                                     }
                                     catch (System.Exception ex)
                                     {
@@ -215,6 +234,53 @@ namespace CoomerDownloader
                 DownloadProgressBar.Visibility = Visibility.Collapsed;
                 DownloadButton.IsEnabled = true;
                 SelectAllButton.IsEnabled = true;
+            }
+        }
+        
+        private void UpdateDownloadStatistics(int downloadedFiles, int totalFiles, long totalBytes, 
+            TimeSpan elapsed, ref DateTime lastUpdateTime, ref long lastBytesDownloaded)
+        {
+            // Dosya sayısı
+            FilesCountText.Text = $"{downloadedFiles} / {totalFiles}";
+            
+            // Yüzde hesapla
+            double percentage = (double)downloadedFiles / totalFiles * 100;
+            ProgressPercentageText.Text = $"{percentage:F1}%";
+            
+            // Toplam boyut
+            double sizeMB = totalBytes / (1024.0 * 1024.0);
+            DataSizeText.Text = $"{sizeMB:F2} MB";
+            
+            // Hız hesapla (son 1 saniyedeki ortalama)
+            var now = DateTime.Now;
+            var timeDiff = (now - lastUpdateTime).TotalSeconds;
+            if (timeDiff >= 0.5) // Her 0.5 saniyede bir güncelle
+            {
+                long bytesDiff = totalBytes - lastBytesDownloaded;
+                double speedMBps = (bytesDiff / (1024.0 * 1024.0)) / timeDiff;
+                SpeedText.Text = $"{speedMBps:F2} MB/s";
+                
+                lastUpdateTime = now;
+                lastBytesDownloaded = totalBytes;
+                
+                // Kalan süre tahmini
+                if (speedMBps > 0 && downloadedFiles < totalFiles)
+                {
+                    int remainingFiles = totalFiles - downloadedFiles;
+                    double avgTimePerFile = elapsed.TotalSeconds / downloadedFiles;
+                    double estimatedSeconds = avgTimePerFile * remainingFiles;
+                    
+                    if (estimatedSeconds < 60)
+                        TimeRemainingText.Text = $"{estimatedSeconds:F0}s";
+                    else if (estimatedSeconds < 3600)
+                        TimeRemainingText.Text = $"{(estimatedSeconds / 60):F0}m {(estimatedSeconds % 60):F0}s";
+                    else
+                        TimeRemainingText.Text = $"{(estimatedSeconds / 3600):F0}h {((estimatedSeconds % 3600) / 60):F0}m";
+                }
+                else
+                {
+                    TimeRemainingText.Text = "--:--";
+                }
             }
         }
     }

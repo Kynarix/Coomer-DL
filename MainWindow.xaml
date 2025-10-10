@@ -95,6 +95,17 @@
                             <Run Text="by " Foreground="#8B949E" FontSize="14"/>
                             <Run Text="Twixx" Foreground="#A371F7" FontSize="14" FontWeight="Bold"/>
                         </TextBlock>
+                        
+                        <!-- Connection Status Indicator -->
+                        <Border x:Name="ConnectionStatusBorder" Margin="20,0,0,0" Padding="10,5" 
+                                Background="#21262D" CornerRadius="4" BorderThickness="1" BorderBrush="#30363D">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="ConnectionStatusIcon" Text="🔄" FontSize="14" 
+                                           VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="ConnectionStatusText" Text="Checking..." 
+                                           FontSize="12" Foreground="#8B949E" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                     
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
@@ -150,9 +161,20 @@
                         </Border>
                         
        
-                        <Button x:Name="SearchButton" Grid.Column="1" Content="🔍 SEARCH" 
-                                Click="SearchButton_Click" Height="42" Padding="25,0" Margin="15,0,0,0"
-                                Style="{StaticResource PrimaryButton}" FontSize="13"/>
+                    <Grid Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <Button x:Name="FavoritesButton" Grid.Column="0" Content="⭐ FAVORITES" 
+                                    Click="FavoritesButton_Click" Height="42" Padding="20,0" Margin="15,0,10,0"
+                                    Style="{StaticResource ModernButton}" FontSize="13"/>
+                            
+                            <Button x:Name="SearchButton" Grid.Column="1" Content="🔍 SEARCH" 
+                                    Click="SearchButton_Click" Height="42" Padding="25,0"
+                                    Style="{StaticResource PrimaryButton}" FontSize="13"/>
+                        </Grid>
                     </Grid>
                     
 
@@ -179,6 +201,51 @@
                     CornerRadius="8" BorderBrush="#30363D" BorderThickness="1" Padding="2">
                 <ListView x:Name="CreatorsListView" Background="Transparent" 
                           BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <ContextMenu.Template>
+                                <ControlTemplate TargetType="ContextMenu">
+                                    <Border Background="#161B22" BorderBrush="#30363D" BorderThickness="1" 
+                                            CornerRadius="4" Padding="4">
+                                        <StackPanel IsItemsHost="True" Background="Transparent"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </ContextMenu.Template>
+                            <ContextMenu.Resources>
+                                <Style TargetType="MenuItem">
+                                    <Setter Property="Background" Value="#161B22"/>
+                                    <Setter Property="Foreground" Value="#C9D1D9"/>
+                                    <Setter Property="Padding" Value="10,8"/>
+                                    <Setter Property="FontSize" Value="13"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="MenuItem">
+                                                <Border x:Name="Border" Background="{TemplateBinding Background}" 
+                                                        BorderThickness="0" Padding="{TemplateBinding Padding}"
+                                                        Margin="0">
+                                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" 
+                                                                      Margin="0" RecognizesAccessKey="False"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsHighlighted" Value="True">
+                                                        <Setter TargetName="Border" Property="Background" Value="#21262D"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter Property="Foreground" Value="#484F58"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ContextMenu.Resources>
+                            <MenuItem x:Name="AddToFavoritesMenuItem" Header="⭐ Add to Favorites" 
+                                      Click="AddToFavorites_Click"/>
+                            <MenuItem x:Name="RemoveFromFavoritesMenuItem" Header="❌ Remove from Favorites" 
+                                      Click="RemoveFromFavorites_Click"/>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
                     <ListView.Resources>
                         <Style TargetType="ListViewItem">
                             <Setter Property="Background" Value="#0D1117"/>
