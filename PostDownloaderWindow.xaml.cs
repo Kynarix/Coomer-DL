@@ -5,6 +5,8 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Input;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CoomerDownloader
 {
@@ -13,6 +15,8 @@ namespace CoomerDownloader
         private readonly CoomerApiService _apiService;
         private readonly Creator _creator;
         private string _downloadPath;
+        private CancellationTokenSource? _cancellationTokenSource;
+        private ManualResetEventSlim? _pauseEvent;
 
         public PostDownloaderWindow(Creator creator)
         {
@@ -21,7 +25,9 @@ namespace CoomerDownloader
             _creator = creator;
             CreatorNameText.Text = $"• {creator.name} ({creator.service})";
             
-            _downloadPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", creator.name ?? "downloads");
+            // Uygulamanın çalıştığı klasörde creators/[creator_name] klasörü oluştur
+            var appDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            _downloadPath = Path.Combine(appDirectory, "Downloaded", creator.name ?? "downloads");
             DownloadPathText.Text = _downloadPath;
             
             LoadPosts();
@@ -117,144 +123,207 @@ namespace CoomerDownloader
             Close();
         }
 
+        private void PauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            _pauseEvent?.Reset();
+            PauseButton.Visibility = Visibility.Collapsed;
+            ResumeButton.Visibility = Visibility.Visible;
+            DownloadStatusText.Text = "Download paused";
+            CurrentFileText.Text = "Click RESUME to continue downloading...";
+        }
+
+        private void ResumeButton_Click(object sender, RoutedEventArgs e)
+        {
+            _pauseEvent?.Set();
+            ResumeButton.Visibility = Visibility.Collapsed;
+            PauseButton.Visibility = Visibility.Visible;
+            DownloadStatusText.Text = "Downloading...";
+        }
+
+        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "Are you sure you want to cancel the download?", 
+                "Cancel Download", 
+                MessageBoxButton.YesNo, 
+                MessageBoxImage.Question);
+            
+            if (result == MessageBoxResult.Yes)
+            {
+                _cancellationTokenSource?.Cancel();
+                DownloadStatusText.Text = "Download cancelled by user";
+                CurrentFileText.Text = "";
+            }
+        }
+
         private async void DownloadButton_Click(object sender, RoutedEventArgs e)
         {
             var selectedPosts = PostsListView.SelectedItems;
             if (selectedPosts.Count == 0)
             {
-                System.Windows.MessageBox.Show("Please select at least one post to download!", "No Selection", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show("Please select at least one post to download!", "No Selection", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             var downloadFolder = _downloadPath;
-            System.IO.Directory.CreateDirectory(downloadFolder);
+            Directory.CreateDirectory(downloadFolder);
+
+            _cancellationTokenSource = new CancellationTokenSource();
+            _pauseEvent = new ManualResetEventSlim(true);
 
             DownloadProgressBar.Visibility = Visibility.Visible;
             StatisticsGrid.Visibility = Visibility.Visible;
             DownloadButton.IsEnabled = false;
             SelectAllButton.IsEnabled = false;
+            PauseButton.Visibility = Visibility.Visible;
+            CancelButton.Visibility = Visibility.Visible;
 
-            int totalFiles = 0;
             int downloadedFiles = 0;
+            int activeDownloads = 0;
             long totalBytesDownloaded = 0;
             var stopwatch = Stopwatch.StartNew();
             var lastUpdateTime = DateTime.Now;
             long lastBytesDownloaded = 0;
 
+            var allFilesToDownload = new List<dynamic>();
             foreach (Post post in selectedPosts)
             {
-                totalFiles += post.AllFiles.Count;
-                if (post.attachments != null) totalFiles += post.attachments.Count;
+                foreach (var file in post.AllFiles)
+                {
+                    if (file != null && !string.IsNullOrEmpty(file.name) && !string.IsNullOrEmpty(file.path))
+                        allFilesToDownload.Add(new { name = file.name, path = file.path });
+                }
+                if (post.attachments != null)
+                {
+                    foreach (var attachment in post.attachments)
+                    {
+                        if (attachment != null && !string.IsNullOrEmpty(attachment.name) && !string.IsNullOrEmpty(attachment.path))
+                            allFilesToDownload.Add(new { name = attachment.name, path = attachment.path });
+                    }
+                }
             }
 
+            int totalFiles = allFilesToDownload.Count;
             DownloadProgressBar.Maximum = totalFiles;
             DownloadProgressBar.IsIndeterminate = false;
             FilesCountText.Text = $"0 / {totalFiles}";
+            DownloadStatusText.Text = "Starting parallel downloads...";
+            CurrentFileText.Text = "Preparing 8 parallel connections...";
+            UpdateDownloadStatistics(0, totalFiles, 0, TimeSpan.Zero, ref lastUpdateTime, ref lastBytesDownloaded);
 
             try
             {
+                var downloadTasks = new List<Task>();
+                var progressLock = new object();
+                var semaphore = new SemaphoreSlim(8); // 8 paralel indirme
+
                 using (var client = new HttpClient())
                 {
                     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36");
 
-                    foreach (Post post in selectedPosts)
+                    foreach (var file in allFilesToDownload)
                     {
+                        if (_cancellationTokenSource.Token.IsCancellationRequested)
+                            break;
 
-                        foreach (var file in post.AllFiles)
+                        await semaphore.WaitAsync(_cancellationTokenSource.Token);
+                        downloadTasks.Add(Task.Run(async () =>
                         {
-                            if (file != null && !string.IsNullOrEmpty(file.name) && !string.IsNullOrEmpty(file.path))
+                            var currentActive = Interlocked.Increment(ref activeDownloads);
+                            try
                             {
-                                try
+                                _pauseEvent.Wait(_cancellationTokenSource.Token);
+                                
+                                if (_cancellationTokenSource.Token.IsCancellationRequested)
+                                    return;
+
+                                var filePath = Path.Combine(downloadFolder, file.name);
+                                var fileUrl = $"https://coomer.st{file.path}";
+
+                                var fileBytes = await client.GetByteArrayAsync(fileUrl, _cancellationTokenSource.Token);
+                                await System.IO.File.WriteAllBytesAsync(filePath, fileBytes, _cancellationTokenSource.Token);
+
+                                var completed = Interlocked.Increment(ref downloadedFiles);
+                                long bytesDownloaded;
+                                lock (progressLock)
                                 {
-                                    DownloadStatusText.Text = $"Downloading: {file.name}...";
-                                    var filePath = System.IO.Path.Combine(downloadFolder, file.name);
-                                    var fileUrl = $"https://coomer.st{file.path}";
-                                    var fileBytes = await client.GetByteArrayAsync(fileUrl);
-                                    await System.IO.File.WriteAllBytesAsync(filePath, fileBytes);
-                                    
-                                    downloadedFiles++;
                                     totalBytesDownloaded += fileBytes.Length;
-                                    DownloadProgressBar.Value = downloadedFiles;
-                                    
-                                    // İstatistikleri güncelle
-                                    UpdateDownloadStatistics(downloadedFiles, totalFiles, totalBytesDownloaded, stopwatch.Elapsed, 
-                                        ref lastUpdateTime, ref lastBytesDownloaded);
+                                    bytesDownloaded = totalBytesDownloaded;
                                 }
-                                catch (System.Exception ex)
-                                {
-                                    DownloadStatusText.Text = $"Failed to download {file.name}: {ex.Message}";
-                                    await System.Threading.Tasks.Task.Delay(1000);
-                                }
-                            }
-                        }
 
-                        if (post.attachments != null)
-                        {
-                            foreach (var attachment in post.attachments)
-                            {
-                                if (attachment != null && !string.IsNullOrEmpty(attachment.name) && !string.IsNullOrEmpty(attachment.path))
+                                Dispatcher.Invoke(() =>
                                 {
-                                    try
-                                    {
-                                        DownloadStatusText.Text = $"Downloading: {attachment.name}...";
-                                        var attachmentPath = System.IO.Path.Combine(downloadFolder, attachment.name);
-                                        var attachmentUrl = $"https://coomer.st{attachment.path}";
-                                        var attachmentBytes = await client.GetByteArrayAsync(attachmentUrl);
-                                        await System.IO.File.WriteAllBytesAsync(attachmentPath, attachmentBytes);
-                                        
-                                        downloadedFiles++;
-                                        totalBytesDownloaded += attachmentBytes.Length;
-                                        DownloadProgressBar.Value = downloadedFiles;
-                                        
-                                        // İstatistikleri güncelle
-                                        UpdateDownloadStatistics(downloadedFiles, totalFiles, totalBytesDownloaded, stopwatch.Elapsed, 
-                                            ref lastUpdateTime, ref lastBytesDownloaded);
-                                    }
-                                    catch (System.Exception ex)
-                                    {
-                                        DownloadStatusText.Text = $"Failed to download {attachment.name}: {ex.Message}";
-                                        await System.Threading.Tasks.Task.Delay(1000);
-                                    }
-                                }
+                                    DownloadProgressBar.Value = completed;
+                                    DownloadStatusText.Text = $"Downloading...";
+                                    CurrentFileText.Text = $"✅ Completed: {Path.GetFileName(file.name)} ({completed}/{totalFiles})";
+                                    UpdateDownloadStatistics(completed, totalFiles, bytesDownloaded, stopwatch.Elapsed,
+                                        ref lastUpdateTime, ref lastBytesDownloaded);
+                                });
                             }
-                        }
+                            catch (Exception ex)
+                            {
+                                Dispatcher.Invoke(() => CurrentFileText.Text = $"❌ Failed: {Path.GetFileName(file.name)} - {ex.Message}");
+                            }
+                            finally
+                            {
+                                Interlocked.Decrement(ref activeDownloads);
+                                semaphore.Release();
+                            }
+                        }));
                     }
                 }
 
-                DownloadStatusText.Text = $"Download complete! {downloadedFiles} files saved to {downloadFolder}";
-                System.Windows.MessageBox.Show($"Download complete!\n\n{downloadedFiles} files downloaded to:\n{downloadFolder}", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                await Task.WhenAll(downloadTasks);
+
+                if (_cancellationTokenSource.Token.IsCancellationRequested)
+                {
+                    DownloadStatusText.Text = $"Download cancelled! {downloadedFiles} of {totalFiles} files downloaded.";
+                    CurrentFileText.Text = "";
+                }
+                else
+                {
+                    DownloadStatusText.Text = $"Download complete! {downloadedFiles} files saved to {downloadFolder}";
+                    System.Windows.MessageBox.Show($"Download complete!\n\n{downloadedFiles} files downloaded to:\n{downloadFolder}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
-            catch (System.Exception ex)
+            catch (OperationCanceledException)
+            {
+                DownloadStatusText.Text = $"Download cancelled! {downloadedFiles} of {totalFiles} files downloaded.";
+                CurrentFileText.Text = "";
+            }
+            catch (Exception ex)
             {
                 DownloadStatusText.Text = $"Error: {ex.Message}";
-                System.Windows.MessageBox.Show($"Download failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Download failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
                 DownloadProgressBar.Visibility = Visibility.Collapsed;
                 DownloadButton.IsEnabled = true;
                 SelectAllButton.IsEnabled = true;
+                PauseButton.Visibility = Visibility.Collapsed;
+                ResumeButton.Visibility = Visibility.Collapsed;
+                CancelButton.Visibility = Visibility.Collapsed;
+                
+                _cancellationTokenSource?.Dispose();
+                _pauseEvent?.Dispose();
             }
         }
         
         private void UpdateDownloadStatistics(int downloadedFiles, int totalFiles, long totalBytes, 
             TimeSpan elapsed, ref DateTime lastUpdateTime, ref long lastBytesDownloaded)
         {
-            // Dosya sayısı
             FilesCountText.Text = $"{downloadedFiles} / {totalFiles}";
             
-            // Yüzde hesapla
             double percentage = (double)downloadedFiles / totalFiles * 100;
             ProgressPercentageText.Text = $"{percentage:F1}%";
             
-            // Toplam boyut
             double sizeMB = totalBytes / (1024.0 * 1024.0);
             DataSizeText.Text = $"{sizeMB:F2} MB";
             
-            // Hız hesapla (son 1 saniyedeki ortalama)
             var now = DateTime.Now;
             var timeDiff = (now - lastUpdateTime).TotalSeconds;
-            if (timeDiff >= 0.5) // Her 0.5 saniyede bir güncelle
+            if (timeDiff >= 0.5)
             {
                 long bytesDiff = totalBytes - lastBytesDownloaded;
                 double speedMBps = (bytesDiff / (1024.0 * 1024.0)) / timeDiff;

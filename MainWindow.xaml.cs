@@ -123,6 +123,7 @@ public partial class MainWindow : Window
         if (CreatorsListView.SelectedItem is CoomerDownloader.Services.Creator selectedCreator)
         {
             var postDownloaderWindow = new PostDownloaderWindow(selectedCreator);
+            postDownloaderWindow.Owner = this; // MainWindow'u owner yap
             postDownloaderWindow.Show();
         }
     }
@@ -151,7 +152,7 @@ public partial class MainWindow : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        System.Windows.Application.Current.Shutdown(); // Tüm window'ları kapat
     }
     private void SearchTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:CoomerDownloader"
         mc:Ignorable="d"
-        Title="Post Downloader - by Kynarix and Twixx" Height="750" Width="1200"
+        Title="Post Downloader - by Twixx" Height="750" Width="1200"
         Background="#0D1117" WindowStyle="None" AllowsTransparency="True" 
         ResizeMode="CanResize" WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -256,27 +256,51 @@
                     CornerRadius="8" BorderBrush="#30363D" BorderThickness="1">
                 <StackPanel>
                     <!-- Main Status Text -->
-                    <TextBlock x:Name="DownloadStatusText" FontSize="14" Foreground="#C9D1D9" 
-                               Margin="0,0,0,12" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                    <StackPanel Margin="0,0,0,12" HorizontalAlignment="Center">
+                        <TextBlock x:Name="DownloadStatusText" FontSize="14" Foreground="#58A6FF" 
+                                   HorizontalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="1000"/>
+                        <TextBlock x:Name="CurrentFileText" FontSize="11" Foreground="#8B949E" 
+                                   HorizontalAlignment="Center" Margin="0,4,0,0" FontStyle="Italic" 
+                                   TextTrimming="CharacterEllipsis" MaxWidth="1000"/>
+                    </StackPanel>
                     
                     <!-- Progress Bar with Percentage -->
                     <Grid Margin="0,0,0,12">
-                        <Border Height="8" Background="#0D1117" CornerRadius="4" 
+                        <Border Height="12" Background="#0D1117" CornerRadius="6" 
                                 Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}">
-                            <ProgressBar x:Name="DownloadProgressBar" Height="8" 
+                            <ProgressBar x:Name="DownloadProgressBar" Height="12" 
                                          Visibility="Collapsed" Background="Transparent" BorderThickness="0">
-                                <ProgressBar.Foreground>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="#238636" Offset="0"/>
-                                        <GradientStop Color="#2EA043" Offset="0.5"/>
-                                        <GradientStop Color="#3FB950" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </ProgressBar.Foreground>
+                                <ProgressBar.Style>
+                                    <Style TargetType="ProgressBar">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ProgressBar">
+                                                    <Grid>
+                                                        <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="6"/>
+                                                        <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="6">
+                                                            <Border.Background>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                    <GradientStop Color="#238636" Offset="0"/>
+                                                                    <GradientStop Color="#2EA043" Offset="0.5"/>
+                                                                    <GradientStop Color="#3FB950" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Border.Background>
+                                                        </Border>
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ProgressBar.Style>
                             </ProgressBar>
                         </Border>
-                        <TextBlock x:Name="ProgressPercentageText" FontSize="11" Foreground="#C9D1D9" 
+                        <TextBlock x:Name="ProgressPercentageText" FontSize="12" Foreground="#FFFFFF" 
                                    HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"
-                                   Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}"/>
+                                   Visibility="{Binding ElementName=DownloadProgressBar, Path=Visibility}">
+                            <TextBlock.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.8"/>
+                            </TextBlock.Effect>
+                        </TextBlock>
                     </Grid>
                     
                     <!-- Statistics Grid -->
@@ -331,6 +355,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
                     <TextBlock Grid.Column="0" FontSize="12" VerticalAlignment="Center">
@@ -338,11 +365,32 @@
                         <Run Text=" Select posts (Ctrl/Shift) and click Download" Foreground="#8B949E"/>
                     </TextBlock>
                     
-                    <Button x:Name="SelectAllButton" Grid.Column="1" Content="✔ SELECT ALL" 
+                    <Button x:Name="SelectAllButton" Grid.Column="1" Content="SELECT ALL" 
                             Click="SelectAllButton_Click" Height="38" Padding="25,0" Margin="0,0,15,0"
                             Style="{StaticResource ModernButton}" FontSize="12"/>
                     
-                    <Button x:Name="DownloadButton" Grid.Column="2" Content="📥 DOWNLOAD SELECTED" 
+                    <Button x:Name="PauseButton" Grid.Column="2" Content="PAUSE" 
+                            Click="PauseButton_Click" Height="38" Padding="25,0" Margin="0,0,10,0"
+                            Style="{StaticResource ModernButton}" FontSize="12" Visibility="Collapsed"/>
+                    
+                    <Button x:Name="ResumeButton" Grid.Column="3" Content="RESUME" 
+                            Click="ResumeButton_Click" Height="38" Padding="25,0" Margin="0,0,10,0"
+                            Style="{StaticResource ActionButton}" FontSize="12" Visibility="Collapsed"/>
+                    
+                    <Button x:Name="CancelButton" Grid.Column="4" Content="CANCEL" 
+                            Click="CancelButton_Click" Height="38" Padding="25,0" Margin="0,0,15,0"
+                            Background="#DA3633" BorderBrush="#F85149" Foreground="White"
+                            FontSize="12" Visibility="Collapsed">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModernButton}">
+                                <Setter Property="Background" Value="#DA3633"/>
+                                <Setter Property="BorderBrush" Value="#F85149"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    
+                    <Button x:Name="DownloadButton" Grid.Column="5" Content="DOWNLOAD SELECTED" 
                             Click="DownloadButton_Click" Height="38" Padding="30,0"
                             Style="{StaticResource ActionButton}" FontSize="13"/>
                 </Grid>
